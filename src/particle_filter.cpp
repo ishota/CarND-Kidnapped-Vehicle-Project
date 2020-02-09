@@ -53,13 +53,6 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], 
                                 double velocity, double yaw_rate) {
-    /**
-     * TODO: Add measurements to each particle and add random Gaussian noise.
-     * NOTE: When adding noise you may find std::normal_distribution 
-     *   and std::default_random_engine useful.
-     *  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
-     *  http://www.cplusplus.com/reference/random/default_random_engine/
-     */
 
     // Predict all particles
     for (unsigned int i = 0; i < particles.size(); i++) {
@@ -89,14 +82,25 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, 
                                      vector<LandmarkObs>& observations) {
-    /**
-     * TODO: Find the predicted measurement that is closest to each 
-     *   observed measurement and assign the observed measurement to this 
-     *   particular landmark.
-     * NOTE: this method will NOT be called by the grading code. But you will 
-     *   probably find it useful to implement this method and use it as a helper 
-     *   during the updateWeights phase.
-     */
+
+    for (unsigned int obs_idx = 0; obs_idx < observations.size(); obs_idx++) {
+
+        double obs_x = observations[obs_idx].x;
+        double obs_y = observations[obs_idx].y;
+
+        // Calculate particles association
+        double min_distance = INFINITY;
+        for (unsigned int pred_idx = 0; pred_idx < predicted.size(); pred_idx++) {
+            double pred_x = predicted[pred_idx].x;
+            double pred_y = predicted[pred_idx].y;
+            double distance = dist(obs_x, obs_y, pred_x, pred_y);
+
+            if (distance < min_distance) {
+                min_distance = distance;
+                observations[obs_idx].id = pred_idx;
+            }
+        }
+    }
 
 }
 
