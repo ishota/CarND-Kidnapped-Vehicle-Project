@@ -25,16 +25,11 @@ using std::default_random_engine;
 static default_random_engine gen;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
-    /**
-     * TODO: Set the number of particles. Initialize all particles to 
-     *   first position (based on estimates of x, y, theta and their uncertainties
-     *   from GPS) and all weights to 1. 
-     * TODO: Add random Gaussian noise to each particle.
-     * NOTE: Consult particle_filter.h for more information about this method 
-     *   (and others in this file).
-     */
-    num_particles = 10;  // TODO: Set the number of particles
 
+    // Set the number of particles
+    num_particles = 10;
+
+    // Create normal distribution
     std::normal_distribution<double> init_dist_x(x, std[0]);
     std::normal_distribution<double> init_dist_y(y, std[1]);
     std::normal_distribution<double> init_dist_theta(theta, std[2]);
@@ -66,6 +61,30 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
      *  http://www.cplusplus.com/reference/random/default_random_engine/
      */
 
+    // Predict all particles
+    for (unsigned int i = 0; i < particles.size(); i++) {
+
+        // Hard check for division by zero 
+        double c1 = velocity;
+        if (abs(yaw_rate) > 0.0001) {
+            c1 /= yaw_rate;
+        }
+
+        // Predict motion as bicycle model
+        double pred_x = c1 * (sin(particles[i].theta) + yaw_rate * delta_t - sin(particles[i].theta));
+        double pred_y = c1 * (cos(particles[i].theta) - cos(particles[i].theta) + (yaw_rate * delta_t));
+        double pred_head = yaw_rate * delta_t;
+
+        // Create normal distribution
+        std::normal_distribution<double> pred_dist_x(pred_x, std_pos[0]);
+        std::normal_distribution<double> pred_dist_y(pred_y, std_pos[1]);
+        std::normal_distribution<double> pred_dist_theta(pred_head, std_pos[2]);
+
+        // Update particles
+        particles[i].x += pred_dist_x(gen);
+        particles[i].y += pred_dist_y(gen);
+        particles[i].theta += pred_dist_theta(gen);
+    }
 }
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted, 
