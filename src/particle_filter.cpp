@@ -64,8 +64,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
         }
 
         // Predict motion as bicycle model
-        double pred_x = c1 * (sin(particles[i].theta) + yaw_rate * delta_t - sin(particles[i].theta));
-        double pred_y = c1 * (cos(particles[i].theta) - cos(particles[i].theta) + (yaw_rate * delta_t));
+        double pred_x = c1 * (sin(particles[i].theta + yaw_rate * delta_t) - sin(particles[i].theta));
+        double pred_y = c1 * (cos(particles[i].theta) - cos(particles[i].theta + (yaw_rate * delta_t)));
         double pred_head = yaw_rate * delta_t;
 
         // Create normal distribution
