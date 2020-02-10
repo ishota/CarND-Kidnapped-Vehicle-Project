@@ -117,7 +117,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
         // Transform observations from VEHICLE'S coordinate system to map one.
         vector<LandmarkObs> transformed_observations;
-        for (int j = 0; j < observations.size(); j++) {
+        for (unsigned int j = 0; j < observations.size(); j++) {
             LandmarkObs lnd_obs;
             lnd_obs.id = j;
             lnd_obs.x = particle_x + (cos(particle_theta) * observations[j].x) - (sin(particle_theta) * observations[j].y);
@@ -127,7 +127,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
         // Filter map landmarks
         vector<LandmarkObs> predicted_landmarks;
-        for (int j = 0; j < map_landmarks.landmark_list.size(); j++) {
+        for (unsigned int j = 0; j < map_landmarks.landmark_list.size(); j++) {
             Map::single_landmark_s landmark = map_landmarks.landmark_list[j];
             if ((abs(particle_x - landmark.x_f) <= sensor_range) && (abs((particle_y - landmark.y_f)) <= sensor_range)) {
                 predicted_landmarks.push_back(LandmarkObs {landmark.id_i, landmark.x_f, landmark.y_f});
@@ -146,13 +146,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         double sigma_y2 = pow(sigma_y, 2);
         double normalizer = (1.0/(2.0 * M_PI * sigma_x * sigma_y));
 
-        for (int j = 0; j < transformed_observations.size(); j++) {
+        for (unsigned int j = 0; j < transformed_observations.size(); j++) {
             double trans_obs_x  = transformed_observations[j].x;
             double trans_obs_y  = transformed_observations[j].y;
             double trans_obs_id = transformed_observations[j].id;
             double multi_prob = 1.0;
 
-            for (int k = 0; k < predicted_landmarks.size(); k++) {
+            for (unsigned int k = 0; k < predicted_landmarks.size(); k++) {
                 double pred_landmark_x  = predicted_landmarks[k].x;
                 double pred_landmark_y  = predicted_landmarks[k].y;
                 double pred_landmark_id = predicted_landmarks[k].id;
@@ -167,7 +167,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     }
 
     // Normalize the weight of all particles
-    for (int i = 0; i < particles.size(); i++) {
+    for (unsigned int i = 0; i < particles.size(); i++) {
         particles[i].weight /= weight_normalizer;
         weights[i] = particles[i].weight;
     }
@@ -201,7 +201,6 @@ void ParticleFilter::resample() {
             }
         }
     }
-    particles = resampled_particles;
 
 }
 
