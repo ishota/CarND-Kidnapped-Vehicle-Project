@@ -27,7 +27,7 @@ static default_random_engine gen;
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
     // Set the number of particles
-    num_particles = 10;
+    num_particles = 20;
 
     // Create normal distribution
     std::normal_distribution<double> init_dist_x(x, std[0]);
@@ -46,7 +46,6 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         particles.push_back(init_particle);
         weights.push_back(init_particle.weight);
     }
-
     is_initialized = true;
 
 }
@@ -59,13 +58,14 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
 
         // Hard check for division by zero 
         double c1 = velocity;
-        if (abs(yaw_rate) > 0.0001) {
+        if (abs(yaw_rate) > 0.001) {
             c1 /= yaw_rate;
+
         }
 
         // Predict motion as bicycle model
-        double pred_x = c1 * (sin(particles[i].theta + yaw_rate * delta_t) - sin(particles[i].theta));
-        double pred_y = c1 * (cos(particles[i].theta) - cos(particles[i].theta + (yaw_rate * delta_t)));
+        double pred_x = c1 * (sin(particles[i].theta + (yaw_rate * delta_t)) - sin(particles[i].theta));
+        double pred_y = c1 * (cos(particles[i].theta) - cos(particles[i].theta + yaw_rate * delta_t));
         double pred_head = yaw_rate * delta_t;
 
         // Create normal distribution
@@ -97,11 +97,10 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
 
             if (distance < min_distance) {
                 min_distance = distance;
-                observations[obs_idx].id = pred_idx;
+                observations[obs_idx].id = predicted[pred_idx].id;
             }
         }
     }
-
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
@@ -109,6 +108,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const Map &map_landmarks) {
 
     double weight_normalizer = 0.0;
+    weights.clear();
 
     for (int i = 0; i < num_particles; i++) {
         double particle_x = particles[i].x;
@@ -119,9 +119,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         vector<LandmarkObs> transformed_observations;
         for (unsigned int j = 0; j < observations.size(); j++) {
             LandmarkObs lnd_obs;
-            lnd_obs.id = j;
-            lnd_obs.x = particle_x + (cos(particle_theta) * observations[j].x) - (sin(particle_theta) * observations[j].y);
-            lnd_obs.y = particle_y + (sin(particle_theta) * observations[j].x) - (cos(particle_theta) * observations[j].y);
+            lnd_obs.x = particle_x + cos(particle_theta) * observations[j].x - sin(particle_theta) * observations[j].y;
+            lnd_obs.y = particle_y + sin(particle_theta) * observations[j].x + cos(particle_theta) * observations[j].y;
             transformed_observations.push_back(lnd_obs);
         }
 
@@ -129,7 +128,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         vector<LandmarkObs> predicted_landmarks;
         for (unsigned int j = 0; j < map_landmarks.landmark_list.size(); j++) {
             Map::single_landmark_s landmark = map_landmarks.landmark_list[j];
-            if ((abs(particle_x - landmark.x_f) <= sensor_range) && (abs((particle_y - landmark.y_f)) <= sensor_range)) {
+            if ((fabs(particle_x - landmark.x_f) <= sensor_range) && (fabs(particle_y - landmark.y_f) <= sensor_range)) {
                 predicted_landmarks.push_back(LandmarkObs {landmark.id_i, landmark.x_f, landmark.y_f});
             }
         }
@@ -144,7 +143,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         double sigma_y  = std_landmark[1];
         double sigma_x2 = pow(sigma_x, 2);
         double sigma_y2 = pow(sigma_y, 2);
-        double normalizer = (1.0/(2.0 * M_PI * sigma_x * sigma_y));
+        double normalizer = (1.0 / (2.0 * M_PI * sigma_x * sigma_y));
 
         for (unsigned int j = 0; j < transformed_observations.size(); j++) {
             double trans_obs_x  = transformed_observations[j].x;
@@ -168,8 +167,12 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
     // Normalize the weight of all particles
     for (unsigned int i = 0; i < particles.size(); i++) {
-        particles[i].weight /= weight_normalizer;
-        weights[i] = particles[i].weight;
+        if (weight_normalizer > 0) {
+            particles[i].weight /= weight_normalizer;
+            weights[i] = particles[i].weight;
+        } else {
+            weights[i] = 0;
+        }
     }
 }
 
