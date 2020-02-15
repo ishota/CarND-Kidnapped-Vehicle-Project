@@ -23,7 +23,7 @@ static default_random_engine gen;
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
     // Set the number of particles
-    num_particles = 20;
+    num_particles = 10;
 
     // Create normal distribution
     std::normal_distribution<double> init_dist_x(x, std[0]);
@@ -108,9 +108,11 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     double sig_x = 2 * pow(std_landmark[0], 2);
     double sig_y = 2* pow(std_landmark[1], 2);
 
+    // Update weights for each particle
     for (int particle_idx = 0; particle_idx < num_particles; particle_idx++) {
         Particle current_particle = particles[particle_idx];
 
+        // Search landmark position in sensor range
         vector<LandmarkObs> landmark_vector;
         for (unsigned int landmark_idx = 0; landmark_idx < map_landmarks.landmark_list.size(); landmark_idx++) {
             LandmarkObs currnet_landmark;
@@ -118,11 +120,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             currnet_landmark.y  = map_landmarks.landmark_list[landmark_idx].y_f;
             currnet_landmark.id = map_landmarks.landmark_list[landmark_idx].id_i;
 
+            // Add landmark position distance between particle and landmark in sensor range
             if (dist(current_particle.x, current_particle.y, currnet_landmark.x, currnet_landmark.y) <= sensor_range) {
                 landmark_vector.push_back(currnet_landmark);
             }
         }
 
+        // Transform cordinate and calculate weight
         vector<LandmarkObs> transformed_observations;
         for (unsigned int observ_idx = 0; observ_idx < observations.size(); observ_idx++) {
             LandmarkObs current_observ = observations[observ_idx];
@@ -135,15 +139,18 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
             dataAssociation(landmark_vector, transformed_observations);
 
-            double particle_probability = 1.0;
-            for (unsigned int observ_idx = 0; observ_idx < transformed_observations.size(); observ_idx++) {
+            // Calculate new particle weight at the end of loop
+            if (observ_idx + 1 == observations.size()) {
 
-                LandmarkObs transformed_observation = transformed_observations[observ_idx];
-                LandmarkObs associated_landmark = landmark_vector[transformed_observation.id];
-                particle_probability *= gauss_norm * exp(-(pow(transformed_observation.x - associated_landmark.x, 2)/sig_x + pow(transformed_observation.y - associated_landmark.y, 2) / sig_y ));
+                double particle_probability = 1.0;
+                for (unsigned int trans_idx = 0; trans_idx < transformed_observations.size(); trans_idx++) {
+                    LandmarkObs transformed_observation = transformed_observations[trans_idx];
+                    LandmarkObs associated_landmark = landmark_vector[transformed_observation.id];
+                    particle_probability *= gauss_norm * exp(-(pow(transformed_observation.x - associated_landmark.x, 2)/sig_x + pow(transformed_observation.y - associated_landmark.y, 2) / sig_y ));
+                }
+                particles[particle_idx].weight = particle_probability;
+                weights[particle_idx] = particle_probability;
             }
-            particles[particle_idx].weight = particle_probability;
-            weights[particle_idx] = particle_probability;
         }
     }
 }
