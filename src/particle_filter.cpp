@@ -16,11 +16,7 @@
 #include <string>
 #include <vector>
 
-#include "helper_functions.h"
-
-using std::string;
-using std::vector;
-using std::default_random_engine;
+using namespace std; 
 
 static default_random_engine gen;
 
@@ -40,11 +36,11 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         init_particle.id = i;
         init_particle.x  = init_dist_x(gen);
         init_particle.y  = init_dist_y(gen);
-        init_particle.theta   = init_dist_theta(gen);
-        init_particle.weight  = 1.0;
-        
+        init_particle.theta  = init_dist_theta(gen);
+        init_particle.weight = 1.0; 
+
         particles.push_back(init_particle);
-        weights.push_back(init_particle.weight);
+        weights.push_back(1.0);
     }
     is_initialized = true;
 
@@ -60,7 +56,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
         double c1 = velocity;
         if (abs(yaw_rate) > 0.001) {
             c1 /= yaw_rate;
-
         }
 
         // Predict motion as bicycle model
@@ -87,6 +82,7 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
 
         double obs_x = observations[obs_idx].x;
         double obs_y = observations[obs_idx].y;
+        int id_of_minimum_predicted_landmark = -1;
 
         // Calculate particles association
         double min_distance = INFINITY;
@@ -97,9 +93,10 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
 
             if (distance < min_distance) {
                 min_distance = distance;
-                observations[obs_idx].id = predicted[pred_idx].id;
+                id_of_minimum_predicted_landmark = pred_idx;
             }
         }
+        observations[obs_idx].id = id_of_minimum_predicted_landmark;
     }
 }
 
@@ -107,71 +104,46 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const vector<LandmarkObs> &observations, 
                                    const Map &map_landmarks) {
 
-    double weight_normalizer = 0.0;
-    weights.clear();
+    double gauss_norm = 1 / (2 * M_PI * std_landmark[0] * std_landmark[1]);
+    double sig_x = 2 * pow(std_landmark[0], 2);
+    double sig_y = 2* pow(std_landmark[1], 2);
 
-    for (int i = 0; i < num_particles; i++) {
-        double particle_x = particles[i].x;
-        double particle_y = particles[i].y;
-        double particle_theta = particles[i].theta;
+    for (int particle_idx = 0; particle_idx < num_particles; particle_idx++) {
+        Particle current_particle = particles[particle_idx];
 
-        // Transform observations from VEHICLE'S coordinate system to map one.
+        vector<LandmarkObs> landmark_vector;
+        for (unsigned int landmark_idx = 0; landmark_idx < map_landmarks.landmark_list.size(); landmark_idx++) {
+            LandmarkObs currnet_landmark;
+            currnet_landmark.x  = map_landmarks.landmark_list[landmark_idx].x_f;
+            currnet_landmark.y  = map_landmarks.landmark_list[landmark_idx].y_f;
+            currnet_landmark.id = map_landmarks.landmark_list[landmark_idx].id_i;
+
+            if (dist(current_particle.x, current_particle.y, currnet_landmark.x, currnet_landmark.y) <= sensor_range) {
+                landmark_vector.push_back(currnet_landmark);
+            }
+        }
+
         vector<LandmarkObs> transformed_observations;
-        for (unsigned int j = 0; j < observations.size(); j++) {
-            LandmarkObs lnd_obs;
-            lnd_obs.x = particle_x + cos(particle_theta) * observations[j].x - sin(particle_theta) * observations[j].y;
-            lnd_obs.y = particle_y + sin(particle_theta) * observations[j].x + cos(particle_theta) * observations[j].y;
-            transformed_observations.push_back(lnd_obs);
-        }
+        for (unsigned int observ_idx = 0; observ_idx < observations.size(); observ_idx++) {
+            LandmarkObs current_observ = observations[observ_idx];
 
-        // Filter map landmarks
-        vector<LandmarkObs> predicted_landmarks;
-        for (unsigned int j = 0; j < map_landmarks.landmark_list.size(); j++) {
-            Map::single_landmark_s landmark = map_landmarks.landmark_list[j];
-            if ((fabs(particle_x - landmark.x_f) <= sensor_range) && (fabs(particle_y - landmark.y_f) <= sensor_range)) {
-                predicted_landmarks.push_back(LandmarkObs {landmark.id_i, landmark.x_f, landmark.y_f});
+            LandmarkObs transformed_observation;
+            transformed_observation.id = current_observ.id;
+            transformed_observation.x  = current_observ.x*cos(current_particle.theta) - current_observ.y*sin(current_particle.theta) + current_particle.x;
+            transformed_observation.y  = current_observ.x*sin(current_particle.theta) + current_observ.y*cos(current_particle.theta) + current_particle.y;
+            transformed_observations.push_back(transformed_observation);
+
+            dataAssociation(landmark_vector, transformed_observations);
+
+            double particle_probability = 1.0;
+            for (unsigned int observ_idx = 0; observ_idx < transformed_observations.size(); observ_idx++) {
+
+                LandmarkObs transformed_observation = transformed_observations[observ_idx];
+                LandmarkObs associated_landmark = landmark_vector[transformed_observation.id];
+                particle_probability *= gauss_norm * exp(-(pow(transformed_observation.x - associated_landmark.x, 2)/sig_x + pow(transformed_observation.y - associated_landmark.y, 2) / sig_y ));
             }
-        }
-
-        // Associate observations to predicted landmarks
-        dataAssociation(predicted_landmarks, transformed_observations);
-
-        // Calculate weight of each particle
-        particles[i].weight = 1.0;
-
-        double sigma_x  = std_landmark[0];
-        double sigma_y  = std_landmark[1];
-        double sigma_x2 = pow(sigma_x, 2);
-        double sigma_y2 = pow(sigma_y, 2);
-        double normalizer = (1.0 / (2.0 * M_PI * sigma_x * sigma_y));
-
-        for (unsigned int j = 0; j < transformed_observations.size(); j++) {
-            double trans_obs_x  = transformed_observations[j].x;
-            double trans_obs_y  = transformed_observations[j].y;
-            double trans_obs_id = transformed_observations[j].id;
-            double multi_prob = 1.0;
-
-            for (unsigned int k = 0; k < predicted_landmarks.size(); k++) {
-                double pred_landmark_x  = predicted_landmarks[k].x;
-                double pred_landmark_y  = predicted_landmarks[k].y;
-                double pred_landmark_id = predicted_landmarks[k].id;
-
-                if (trans_obs_id == pred_landmark_id) {
-                    multi_prob = normalizer * exp(-1.0 * ((pow((trans_obs_x - pred_landmark_x), 2)/(2.0 * sigma_x2)) + (pow((trans_obs_y - pred_landmark_y), 2)/(2.0 * sigma_y2))));
-                    particles[i].weight *= multi_prob;
-                }
-            }
-        }
-        weight_normalizer += particles[i].weight;
-    }
-
-    // Normalize the weight of all particles
-    for (unsigned int i = 0; i < particles.size(); i++) {
-        if (weight_normalizer > 0) {
-            particles[i].weight /= weight_normalizer;
-            weights[i] = particles[i].weight;
-        } else {
-            weights[i] = 0;
+            particles[particle_idx].weight = particle_probability;
+            weights[particle_idx] = particle_probability;
         }
     }
 }
@@ -183,10 +155,10 @@ void ParticleFilter::resample() {
 
     double max_weight = 0;
     for (int i = 0; i < num_particles; i++) {
-        if (weights[i] > max_weight) { 
+        if (weights[i] > max_weight) {
             max_weight = weights[i];
         }
-    }
+    } 
 
     double beta = 0.0;
     for (int i = 0; i < num_particles; i++) {
@@ -204,7 +176,7 @@ void ParticleFilter::resample() {
             }
         }
     }
-    particles = resampled_particles;
+    particles = resampled_particles;  
 }
 
 void ParticleFilter::SetAssociations(Particle& particle, 
